@@ -1,30 +1,29 @@
 window.addEventListener('load', () => {
 
-    // --- 1. SCENE SETUP ---
+    // --- 1. THREE.JS SCENE SETUP ---
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0a12);
-    scene.fog = new THREE.FogExp2(0x0a0a12, 0.035);
+    scene.background = new THREE.Color(0x0c0d14);
+    scene.fog = new THREE.FogExp2(0x0c0d14, 0.03);
 
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.getElementById('game-container').appendChild(renderer.domElement);
 
-    // Lighting
+    // Ambient & Flashlight
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
     scene.add(ambientLight);
 
-    const flashlight = new THREE.SpotLight(0xffffff, 2.5, 20, Math.PI / 4, 0.5);
+    const flashlight = new THREE.SpotLight(0xffffff, 2.5, 22, Math.PI / 4, 0.5);
     camera.add(flashlight);
     flashlight.position.set(0, 0, 1);
     flashlight.target = camera;
     scene.add(camera);
 
-    // --- 2. COLLISION & MAP BUILDING SYSTEM ---
+    // --- 2. WORLD BUILDER & COLLISION SYSTEM ---
     const colliders = [];
     const pickableItems = [];
 
-    // Helper: Build Solid Box (Walls / Floor / Furniture)
     function buildBox(x, y, z, w, h, d, color, hasCollision = true) {
         const geo = new THREE.BoxGeometry(w, h, d);
         const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.7 });
@@ -39,75 +38,69 @@ window.addEventListener('load', () => {
         return mesh;
     }
 
-    // --- 3. BUILD THE WORLD ---
+    // A. TUTORIAL ROOM (Spawn area at Z = 30)
+    buildBox(0, -0.1, 30, 16, 0.2, 16, 0x222233, false); // Floor
+    buildBox(0, 2.5, 38, 16, 5, 0.5, 0x1e222d); // Back Wall
+    buildBox(-8, 2.5, 30, 0.5, 5, 16, 0x1e222d); // Left Wall
+    buildBox(8, 2.5, 30, 0.5, 5, 16, 0x1e222d); // Right Wall
+    buildBox(-5, 2.5, 22, 6, 5, 0.5, 0x1e222d);  // Front Wall Left
+    buildBox(5, 2.5, 22, 6, 5, 0.5, 0x1e222d);   // Front Wall Right (Door archway in center)
 
-    // A. TUTORIAL ROOM (Ground Floor, Offset at Z = 30)
-    buildBox(0, -0.1, 30, 16, 0.2, 16, 0x333344, false); // Floor
-    buildBox(0, 2.5, 38, 16, 5, 0.5, 0x222233); // Back Wall
-    buildBox(-8, 2.5, 30, 0.5, 5, 16, 0x222233); // Left Wall
-    buildBox(8, 2.5, 30, 0.5, 5, 16, 0x222233); // Right Wall
-    buildBox(0, 2.5, 22, 16, 5, 0.5, 0x222233); // Wall facing main house
-
-    // Doorway trigger archway from Tutorial to House (At Z = 22)
-    // Remove tutorial front wall section to walk through
-    const tutWallFrontL = buildBox(-5, 2.5, 22.2, 6, 5, 0.5, 0x222233);
-    const tutWallFrontR = buildBox(5, 2.5, 22.2, 6, 5, 0.5, 0x222233);
-
-    // Tutorial NPC (Floating Orb / Hologram)
-    const npcHead = new THREE.Mesh(
-        new THREE.SphereGeometry(0.5, 16, 16),
-        new THREE.MeshStandardMaterial({ color: 0x00e676, emissive: 0x008844 })
+    // Tutorial NPC Guide
+    const npcMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.4, 0.4, 1.8, 16),
+        new THREE.MeshStandardMaterial({ color: 0x2196f3, emissive: 0x0d47a1 })
     );
-    npcHead.position.set(0, 1.8, 27);
-    npcHead.name = "npc";
-    scene.add(npcHead);
+    npcMesh.position.set(0, 0.9, 27);
+    npcMesh.name = "npc";
+    scene.add(npcMesh);
 
-    // B. MAIN TWO-STORY HOUSE (Ground Floor Z = 0 to 20, Upstairs Y = 4)
-    // Ground Floor (Y = 0)
+    // B. MAIN 2-STORY HOUSE (Z = -10 to 10)
+    // Floors
     buildBox(0, -0.1, 0, 24, 0.2, 20, 0x2b2b2b, false); // Ground Floor
-    buildBox(0, 4, 0, 24, 0.2, 20, 0x3a2518, false);  // 2nd Floor Floorboard
-
-    // Stairs to Upstairs (Ramp Style Collision)
-    for (let i = 0; i < 10; i++) {
-        buildBox(9, i * 0.4, 8 - (i * 0.8), 3, 0.4, 0.8, 0x4a2e1b);
-    }
+    buildBox(0, 4, 0, 24, 0.2, 20, 0x3e2723, false);  // 2nd Floor Floorboard
 
     // Outer Walls
-    buildBox(-12, 4, 0, 0.5, 8, 20, 0x333a42); // Left Wall
-    buildBox(12, 4, 0, 0.5, 8, 20, 0x333a42);  // Right Wall
-    buildBox(0, 4, -10, 24, 8, 0.5, 0x333a42); // Back Wall
-    buildBox(0, 4, 10, 24, 8, 0.5, 0x333a42);  // Front Wall
+    buildBox(-12, 4, 0, 0.5, 8, 20, 0x37474f); // Left
+    buildBox(12, 4, 0, 0.5, 8, 20, 0x37474f);  // Right
+    buildBox(0, 4, -10, 24, 8, 0.5, 0x37474f); // Back
+    buildBox(0, 4, 10, 24, 8, 0.5, 0x37474f);  // Front
 
-    // Downstairs Interior Divider (Living Room | Kitchen)
-    buildBox(-2, 2, 0, 0.5, 4, 20, 0x272c33);
+    // Stairs to Upstairs (Ramp Steps)
+    for (let i = 0; i < 10; i++) {
+        buildBox(9, i * 0.4, 8 - (i * 0.8), 3, 0.4, 0.8, 0x4e342e);
+    }
 
-    // Upstairs Interior Dividers (Bedroom 1 | Bedroom 2 | Bathroom)
-    buildBox(0, 6, 0, 0.5, 4, 20, 0x272c33); // Split Left/Right upstairs
-    buildBox(-6, 6, 0, 12, 4, 0.5, 0x272c33); // Split Left Bedrooms
+    // Downstairs Interior Wall (Living Room | Kitchen)
+    buildBox(-2, 2, 0, 0.5, 4, 20, 0x263238);
 
-    // --- 4. ROOM DECORATIONS & LOOT ---
+    // Upstairs Interior Walls (2 Bedrooms | Bathroom)
+    buildBox(0, 6, 0, 0.5, 4, 20, 0x263238); // Split Left/Right
+    buildBox(-6, 6, 0, 12, 4, 0.5, 0x263238); // Split Bedrooms
+
+    // --- 3. FURNITURE & LOOT LOCATIONS ---
 
     // Lounge Room (Downstairs Left)
-    buildBox(-7, 0.5, -4, 4, 1, 2, 0x9c27b0); // Couch
+    buildBox(-7, 0.5, -4, 4, 1, 2, 0x7b1fa2); // Couch
     buildBox(-7, 0.4, -8, 3, 0.8, 1, 0x111111); // TV
 
     // Kitchen (Downstairs Right)
-    buildBox(6, 0.6, -7, 6, 1.2, 2, 0xd1d5db); // Counter
-    buildBox(10, 1.5, -7, 2, 3, 2, 0x9ca3af); // Fridge
+    buildBox(6, 0.6, -7, 6, 1.2, 2, 0xc2c2c2); // Counter
+    buildBox(10, 1.5, -7, 2, 3, 2, 0x9e9e9e); // Fridge
 
     // Bedroom 1 (Upstairs Left-Back)
-    buildBox(-7, 4.6, -6, 3.5, 1, 4, 0x3f51b5); // Bed
+    buildBox(-7, 4.6, -6, 3.5, 1, 4, 0x303f9f); // Bed
 
     // Bedroom 2 (Upstairs Left-Front)
-    buildBox(-7, 4.6, 5, 3.5, 1, 4, 0xe91e63); // Bed
+    buildBox(-7, 4.6, 5, 3.5, 1, 4, 0xc2185b); // Bed
 
-    // Upstairs Bathroom (Upstairs Right-Back)
-    buildBox(6, 4.5, -6, 2.5, 1, 3, 0xffffff); // Bathtub
+    // Bathroom (Upstairs Right-Back)
+    buildBox(6, 4.5, -6, 2.5, 1, 3, 0xe0e0e0); // Tub
 
-    // Loot Items (Pickup Targets)
+    // Spawn 4 Loot Cubes across the 4 Rooms
     function spawnLoot(x, y, z) {
         const item = new THREE.Mesh(
-            new THREE.BoxGeometry(0.3, 0.3, 0.3),
+            new THREE.BoxGeometry(0.35, 0.35, 0.35),
             new THREE.MeshStandardMaterial({ color: 0x00e676, emissive: 0x005522 })
         );
         item.position.set(x, y, z);
@@ -116,12 +109,12 @@ window.addEventListener('load', () => {
         pickableItems.push(item);
     }
 
-    spawnLoot(-7, 1.1, -4); // Lounge Couch Loot
-    spawnLoot(6, 1.4, -7);  // Kitchen Counter Loot
-    spawnLoot(-7, 5.3, -6); // Bedroom 1 Bed Loot
-    spawnLoot(6, 5.2, -6);  // Bathroom Loot
+    spawnLoot(-7, 1.1, -4); // Lounge Couch
+    spawnLoot(6, 1.4, -7);  // Kitchen Counter
+    spawnLoot(-7, 5.3, -6); // Bedroom 1
+    spawnLoot(-7, 5.3, 5);  // Bedroom 2
 
-    // --- 5. CONTROLS, MOVEMENT & COLLISION ---
+    // --- 4. CONTROLS, STAMINA & MOVEMENT ---
 
     let isLocked = false;
     let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
@@ -130,9 +123,9 @@ window.addEventListener('load', () => {
     let stamina = 100;
     const maxStamina = 100;
     const cameraRotation = { yaw: 0, pitch: 0 };
-    
-    // Player Spawn in Tutorial Room
     const playerRadius = 0.5;
+
+    // Camera Spawn in Tutorial Room
     camera.position.set(0, 1.6, 32);
 
     document.body.addEventListener('click', () => {
@@ -182,7 +175,7 @@ window.addEventListener('load', () => {
         }
     });
 
-    // --- 6. RAYCASTING INTERACTION ---
+    // --- 5. RAYCASTING INTERACTION ---
 
     const raycaster = new THREE.Raycaster();
     const centerVector = new THREE.Vector2(0, 0);
@@ -191,7 +184,7 @@ window.addEventListener('load', () => {
 
     function checkRaycast() {
         raycaster.setFromCamera(centerVector, camera);
-        const intersects = raycaster.intersectObjects([...pickableItems, npcHead]);
+        const intersects = raycaster.intersectObjects([...pickableItems, npcMesh]);
 
         const prompt = document.getElementById('interaction-prompt');
 
@@ -217,7 +210,7 @@ window.addEventListener('load', () => {
             const tutBox = document.getElementById('tutorial-box');
             tutBox.style.display = 'block';
             document.getElementById('tut-title').textContent = "GUIDE BOT";
-            document.getElementById('tut-text').textContent = "Welcome! Use WASD to walk, SHIFT to sprint (watch stamina!), and E to grab items. Head through the doorway behind me into the 2-story house and collect all 4 hidden items!";
+            document.getElementById('tut-text').textContent = "Controls: Use WASD to walk, SHIFT to sprint (watch your stamina bar!), and E to pick up objects. Head through the doorway behind me into the 2-story house to collect all 4 items!";
         } else if (hoveredObject.name === "loot") {
             scene.remove(hoveredObject);
 
@@ -229,6 +222,13 @@ window.addEventListener('load', () => {
 
             lootCollected++;
             document.getElementById('loot-count').textContent = lootCollected;
+
+            if (lootCollected === 4) {
+                const tutBox = document.getElementById('tutorial-box');
+                tutBox.style.display = 'block';
+                document.getElementById('tut-title').textContent = "ALL ITEMS FOUND!";
+                document.getElementById('tut-text').textContent = "Congratulations! You found all 4 hidden items across both floors.";
+            }
         }
     }
 
@@ -241,13 +241,13 @@ window.addEventListener('load', () => {
 
         for (let collider of colliders) {
             if (playerBox.intersectsBox(collider)) {
-                return true; // Collision detected
+                return true;
             }
         }
         return false;
     }
 
-    // --- 7. GAME LOOP ---
+    // --- 6. GAME LOOP ---
 
     const clock = new THREE.Clock();
 
@@ -264,13 +264,14 @@ window.addEventListener('load', () => {
                 stamina -= 35 * delta;
                 if (stamina < 0) stamina = 0;
             } else if (stamina < maxStamina && !isSprinting) {
-                stamina += 20 * delta;
+                stamina += 22 * delta;
                 if (stamina > maxStamina) stamina = maxStamina;
             }
 
             staminaBar.style.width = `${stamina}%`;
+            staminaBar.style.backgroundColor = stamina < 20 ? '#ff5252' : '#2196f3';
 
-            // Movement Logic
+            // Movement Calculation
             let speed = (isSprinting && stamina > 0) ? 8.0 : 4.0;
 
             const moveDir = new THREE.Vector3();
@@ -295,7 +296,7 @@ window.addEventListener('load', () => {
                 camera.position.z = targetPosZ.z;
             }
 
-            // Simple Stair Elevator (Automatic Y adjustment on stairs)
+            // Stair Elevation Handling
             if (camera.position.x > 7 && camera.position.x < 11 && camera.position.z > -1 && camera.position.z < 9) {
                 const stairHeight = (8 - camera.position.z) * 0.5;
                 camera.position.y = Math.max(1.6, 1.6 + stairHeight);
