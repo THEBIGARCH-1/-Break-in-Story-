@@ -3,29 +3,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D House Search Game</title>
+    <title>3D Dungeon & House Heist</title>
     <link rel="stylesheet" href="style.css">
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    
     <script src="script.js" defer></script>
 </head>
 <body>
 
     <div id="game-container">
-        <div id="crosshair">+</div>
+        <div id="crosshair"></div>
 
-        <div id="interaction-prompt">Press <span class="key">E</span> to Interact</div>
+        <div id="fade-overlay"></div>
+
+        <div id="interaction-prompt">
+            <span class="key">E</span> <span id="prompt-text">Interact</span>
+        </div>
 
         <div id="stamina-container">
-            <div id="stamina-bar"></div>
+            <div id="stamina-label">STAMINA</div>
+            <div id="stamina-bar-bg">
+                <div id="stamina-bar"></div>
+            </div>
         </div>
 
-        <div id="tutorial-box">
-            <h2 id="tut-title">3D HOUSE SEARCH</h2>
-            <p id="tut-text"><b>CLICK ANYWHERE TO START</b><br><br>Talk to the Guide NPC in front of you using <b>E</b> to learn the controls!</p>
+        <div id="dialogue-box">
+            <div id="npc-header">
+                <div id="npc-badge">👮</div>
+                <div id="npc-name">POLICE OFFICER</div>
+            </div>
+            <p id="dialogue-text">Welcome recruit! Click anywhere on the screen to look around, then step up and talk to me.</p>
+            <div id="dialogue-hint">Press <span class="key">E</span> to advance dialogue</div>
         </div>
 
-        <div id="inventory-ui">Items Found: <span id="loot-count">0</span> / <span id="total-loot">4</span></div>
+        <div id="hotbar">
+            <button class="slot" id="slot-sword" data-slot="1">
+                <span class="slot-number">1</span>
+                <div class="item-icon">⚔️</div>
+                <span class="slot-label">Sword</span>
+            </button>
+            <button class="slot" id="slot-crate" data-slot="2">
+                <span class="slot-number">2</span>
+                <div class="item-icon">📦</div>
+                <span class="slot-label">Crate</span>
+            </button>
+            <button class="slot" id="slot-phone" data-slot="3">
+                <span class="slot-number">3</span>
+                <div class="item-icon">📱</div>
+                <span class="slot-label">Phone</span>
+            </button>
+        </div>
     </div>
 
 </body>
