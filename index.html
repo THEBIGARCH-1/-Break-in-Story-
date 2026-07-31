@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Midnight Break-In: Interactive Story</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="menu-screen" class="screen">
+            <h1>MIDNIGHT BREAK-IN</h1>
+            <p class="subtitle">An Interactive Mystery Game</p>
+            
+            <div class="button-group">
+                <button id="new-game-btn" class="menu-btn">New Game</button>
+                <button id="load-game-btn" class="menu-btn" disabled>Quick Load</button>
+            </div>
+            <p id="save-status"></p>
+        </div>
+
+        <div id="story-screen" class="screen hidden">
+            <div id="top-bar">
+                <span id="chapter-title">Chapter 1</span>
+                <button id="quick-save-btn" class="action-btn">Quick Save</button>
+            </div>
+
+            <div id="story-box">
+                <p id="story-text">Loading story...</p>
+            </div>
+
+            <div id="choices-box" class="button-group">
+                </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
