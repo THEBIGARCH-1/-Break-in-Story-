@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Break-In Game</title>
+    <title>3D House Break-In Game</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="script.js" defer></script>
@@ -13,7 +13,7 @@
     <div id="game-container">
         <div id="crosshair">+</div>
 
-        <div id="interaction-prompt">Press <span class="key">E</span> to Pick Up</div>
+        <div id="interaction-prompt">Press <span class="key">E</span> to Interact</div>
 
         <div id="stamina-container">
             <div id="stamina-bar"></div>
@@ -21,10 +21,10 @@
 
         <div id="tutorial-box">
             <h2 id="tut-title">MISSION: HOUSE BREAK-IN</h2>
-            <p id="tut-text"><b>CLICK ANYWHERE TO START</b><br><br><b>WASD</b> to Walk | <b>SHIFT</b> to Sprint | <b>E</b> to Pick Up Loot</p>
+            <p id="tut-text"><b>CLICK ANYWHERE TO START</b><br><br><b>WASD</b> - Walk | <b>SHIFT</b> - Sprint | <b>E</b> - Talk / Pick Up</p>
         </div>
 
-        <div id="inventory-ui">Loot Collected: <span id="loot-count">0</span>/1</div>
+        <div id="inventory-ui">Loot Collected: <span id="loot-count">0</span> / <span id="total-loot">4</span></div>
     </div>
 
 </body>
