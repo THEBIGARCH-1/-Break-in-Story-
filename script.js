@@ -1,237 +1,337 @@
-* {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-    user-select: none;
-}
+window.addEventListener('load', () => {
 
-body, html {
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    background-color: #000;
-    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-}
+    // --- 1. THREE.JS SCENE & BRIGHT LIGHTING SETUP ---
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1a1a24); // Dark blue gray (Not pure black)
 
-#game-container {
-    position: relative;
-    width: 100vw;
-    height: 100vh;
-}
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.getElementById('game-container').appendChild(renderer.domElement);
 
-/* Crosshair Reticle */
-#crosshair {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 8px;
-    height: 8px;
-    background: rgba(255, 255, 255, 0.9);
-    border: 2px solid rgba(0, 0, 0, 0.5);
-    border-radius: 50%;
-    pointer-events: none;
-    z-index: 10;
-}
+    // BRIGHT LIGHTING - Fixes Black Screen Issue
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2); // Bright room light
+    scene.add(ambientLight);
 
-/* Smooth Fade Overlay */
-#fade-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: #000;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 1s cubic-bezier(0.4, 0, 0.2, 1);
-    z-index: 30;
-}
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(5, 10, 7);
+    scene.add(dirLight);
 
-#fade-overlay.active {
-    opacity: 1;
-}
+    const colliders = [];
+    const interactables = [];
 
-/* Key Display Styling */
-.key {
-    background: #2196f3;
-    color: #fff;
-    padding: 3px 8px;
-    border-radius: 5px;
-    font-weight: bold;
-    font-size: 13px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
-}
+    // Helper: Build Textured Boxes
+    function buildBox(x, y, z, w, h, d, color, hasCollision = true) {
+        const geo = new THREE.BoxGeometry(w, h, d);
+        const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.5 });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x, y, z);
+        scene.add(mesh);
 
-/* Interaction Prompt */
-#interaction-prompt {
-    position: absolute;
-    top: 58%;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(12, 16, 26, 0.9);
-    color: #fff;
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-size: 15px;
-    display: none;
-    border: 1px solid #2196f3;
-    box-shadow: 0 0 15px rgba(33, 150, 243, 0.4);
-    z-index: 10;
-}
+        if (hasCollision) {
+            const box = new THREE.Box3().setFromObject(mesh);
+            colliders.push(box);
+        }
+        return mesh;
+    }
 
-/* Stamina HUD */
-#stamina-container {
-    position: absolute;
-    bottom: 110px;
-    left: 30px;
-    width: 200px;
-    z-index: 10;
-}
+    // --- 2. DUNGEON TUTORIAL ROOM (Spawn at Z = 50) ---
+    buildBox(0, -0.1, 50, 14, 0.2, 14, 0x3a3a4a, false); // Floor
+    buildBox(0, 4.1, 50, 14, 0.2, 14, 0x22222e, false);  // Ceiling
 
-#stamina-label {
-    color: #64b5f6;
-    font-size: 11px;
-    font-weight: bold;
-    letter-spacing: 1px;
-    margin-bottom: 4px;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
-}
+    buildBox(0, 2, 57, 14, 4, 0.6, 0x4a4a5a);   // Back Wall
+    buildBox(-7, 2, 50, 0.6, 4, 14, 0x4a4a5a);  // Left Wall
+    buildBox(7, 2, 50, 0.6, 4, 14, 0x4a4a5a);   // Right Wall
+    buildBox(-4.2, 2, 43, 5.6, 4, 0.6, 0x4a4a5a); // Front Wall Left
+    buildBox(4.2, 2, 43, 5.6, 4, 0.6, 0x4a4a5a);  // Front Wall Right
 
-#stamina-bar-bg {
-    width: 100%;
-    height: 10px;
-    background: rgba(0, 0, 0, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 6px;
-    overflow: hidden;
-}
+    // Exit Door
+    const transitionDoor = new THREE.Mesh(
+        new THREE.BoxGeometry(2.8, 3.6, 0.3),
+        new THREE.MeshStandardMaterial({ color: 0x8b5a2b })
+    );
+    transitionDoor.position.set(0, 1.8, 43);
+    transitionDoor.name = "exit_door";
+    scene.add(transitionDoor);
+    interactables.push(transitionDoor);
 
-#stamina-bar {
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, #1e88e5, #00e676);
-    transition: width 0.1s linear;
-}
+    // Police Officer NPC
+    const policeGroup = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 1.2, 16), new THREE.MeshStandardMaterial({ color: 0x1e88e5 }));
+    body.position.y = 0.6;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 16, 16), new THREE.MeshStandardMaterial({ color: 0xffcc99 }));
+    head.position.y = 1.4;
+    const hat = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.3, 0.16, 16), new THREE.MeshStandardMaterial({ color: 0x0d47a1 }));
+    hat.position.y = 1.66;
 
-/* Dialogue Box UI */
-#dialogue-box {
-    position: absolute;
-    top: 30px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(10, 14, 23, 0.95);
-    border: 2px solid #2196f3;
-    color: white;
-    padding: 20px 28px;
-    border-radius: 12px;
-    text-align: center;
-    width: 90%;
-    max-width: 540px;
-    z-index: 10;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), 0 0 20px rgba(33, 150, 243, 0.3);
-}
+    policeGroup.add(body, head, hat);
+    policeGroup.position.set(0, 0, 52);
+    policeGroup.name = "police_npc";
+    scene.add(policeGroup);
+    interactables.push(body, head, hat);
 
-#npc-header {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    margin-bottom: 10px;
-}
+    // --- 3. TWO-STORY HOUSE (Z = -10 to 10) ---
+    buildBox(0, -0.1, 0, 24, 0.2, 20, 0x555555, false); // Ground Floor
+    buildBox(0, 4, 0, 24, 0.2, 20, 0x6d4c41, false);  // 2nd Floor
 
-#npc-badge {
-    font-size: 20px;
-}
+    buildBox(-12, 4, 0, 0.6, 8, 20, 0x455a64); 
+    buildBox(12, 4, 0, 0.6, 8, 20, 0x455a64);  
+    buildBox(0, 4, -10, 24, 8, 0.6, 0x455a64); 
+    buildBox(0, 4, 10, 24, 8, 0.6, 0x455a64);  
 
-#npc-name {
-    color: #64b5f6;
-    font-size: 16px;
-    font-weight: bold;
-    letter-spacing: 1px;
-}
+    for (let i = 0; i < 10; i++) {
+        buildBox(9, i * 0.4, 8 - (i * 0.8), 3, 0.4, 0.8, 0x8d6e63);
+    }
 
-#dialogue-text {
-    font-size: 15px;
-    line-height: 1.5;
-    color: #e0e6ed;
-    min-height: 45px;
-}
+    buildBox(-7, 0.5, -4, 4, 1, 2, 0xab47bc); // Couch
+    buildBox(-7, 0.4, -1, 2.5, 0.6, 1.5, 0x5d4037); // Table
 
-#dialogue-hint {
-    margin-top: 12px;
-    font-size: 12px;
-    color: #90a4ae;
-}
+    // --- 4. 3D ITEMS ON FLOOR ---
+    // Sword
+    const swordGroup = new THREE.Group();
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.95, 0.02), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x222222 }));
+    const hilt = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.05, 0.06), new THREE.MeshStandardMaterial({ color: 0xffd700 }));
+    blade.position.y = 0.48;
+    swordGroup.add(blade, hilt);
+    swordGroup.rotation.z = Math.PI / 2;
+    swordGroup.position.set(-3.5, 0.2, 50);
+    swordGroup.name = "item_sword";
+    scene.add(swordGroup);
+    interactables.push(blade, hilt);
 
-/* Interactive Bottom Hotbar */
-#hotbar {
-    position: absolute;
-    bottom: 25px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 12px;
-    z-index: 20;
-}
+    // Crate
+    const crateMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.85, 0.85, 0.85),
+        new THREE.MeshStandardMaterial({ color: 0xd7ccc8 })
+    );
+    crateMesh.position.set(3.5, 0.42, 50);
+    crateMesh.name = "item_crate";
+    scene.add(crateMesh);
+    interactables.push(crateMesh);
 
-.slot {
-    position: relative;
-    width: 70px;
-    height: 70px;
-    background: rgba(15, 20, 30, 0.85);
-    border: 2px solid #37474f;
-    border-radius: 10px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    outline: none;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
+    // Phone
+    const phoneMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.26, 0.02, 0.48),
+        new THREE.MeshStandardMaterial({ color: 0x212121 })
+    );
+    phoneMesh.position.set(-7, 0.72, -1);
+    phoneMesh.name = "item_phone";
+    scene.add(phoneMesh);
+    interactables.push(phoneMesh);
 
-.slot:hover {
-    border-color: #64b5f6;
-    transform: translateY(-2px);
-}
+    // --- 5. DIALOGUE & INVENTORY ---
+    const policeLines = [
+        "Officer: Welcome recruit! Walk around with WASD and turn with your mouse.",
+        "Officer: Look at the Sword or Crate on the floor and press E to grab them.",
+        "Officer: Once you grab them, press keys 1, 2, or 3 to select them in your bottom inventory!",
+        "Officer: Head through the wooden door behind me to exit into the house!"
+    ];
+    let lineIdx = 0;
 
-.slot.collected {
-    border-color: #00e676;
-    background: rgba(0, 230, 118, 0.12);
-}
+    const inventory = {
+        1: { name: "item_sword", collected: false, equipped: false },
+        2: { name: "item_crate", collected: false, equipped: false },
+        3: { name: "item_phone", collected: false, equipped: false }
+    };
 
-.slot.active {
-    border-color: #ffeb3b !important;
-    box-shadow: 0 0 15px rgba(255, 235, 59, 0.5);
-    transform: translateY(-4px);
-}
+    // --- 6. PLAYER MOVEMENT & CAMERA ---
+    let isLocked = false;
+    let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+    let isSprinting = false;
 
-.slot-number {
-    position: absolute;
-    top: 4px;
-    left: 6px;
-    font-size: 11px;
-    color: #90a4ae;
-    font-weight: bold;
-}
+    let stamina = 100;
+    const cameraRotation = { yaw: 0, pitch: 0 };
+    const playerRadius = 0.4;
 
-.slot-label {
-    position: absolute;
-    bottom: 4px;
-    font-size: 10px;
-    color: #b0bec5;
-    font-weight: 500;
-}
+    camera.position.set(0, 1.6, 48);
 
-.item-icon {
-    font-size: 26px;
-    opacity: 0.25;
-    filter: grayscale(100%);
-    transition: all 0.3s ease;
-}
+    document.body.addEventListener('click', (e) => {
+        if (e.target.closest('.slot')) return;
+        document.body.requestPointerLock();
+    });
 
-.slot.collected .item-icon {
-    opacity: 1;
-    filter: grayscale(0%);
-}
+    document.addEventListener('pointerlockchange', () => {
+        isLocked = document.pointerLockElement === document.body;
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isLocked) return;
+
+        cameraRotation.yaw -= e.movementX * 0.002;
+        cameraRotation.pitch -= e.movementY * 0.002;
+        cameraRotation.pitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, cameraRotation.pitch));
+
+        const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+        euler.x = cameraRotation.pitch;
+        euler.y = cameraRotation.yaw;
+        camera.quaternion.setFromEuler(euler);
+    });
+
+    window.addEventListener('keydown', (e) => {
+        switch (e.code) {
+            case 'KeyW': moveForward = true; break;
+            case 'KeyS': moveBackward = true; break;
+            case 'KeyA': moveLeft = true; break;
+            case 'KeyD': moveRight = true; break;
+            case 'ShiftLeft':
+            case 'ShiftRight': isSprinting = true; break;
+            case 'KeyE': interact(); break;
+            case 'Digit1': toggleEquipSlot(1); break;
+            case 'Digit2': toggleEquipSlot(2); break;
+            case 'Digit3': toggleEquipSlot(3); break;
+        }
+    });
+
+    window.addEventListener('keyup', (e) => {
+        switch (e.code) {
+            case 'KeyW': moveForward = false; break;
+            case 'KeyS': moveBackward = false; break;
+            case 'KeyA': moveLeft = false; break;
+            case 'KeyD': moveRight = false; break;
+            case 'ShiftLeft':
+            case 'ShiftRight': isSprinting = false; break;
+        }
+    });
+
+    document.querySelectorAll('.slot').forEach(slotBtn => {
+        slotBtn.addEventListener('click', () => {
+            const slotNum = slotBtn.getAttribute('data-slot');
+            toggleEquipSlot(slotNum);
+        });
+    });
+
+    function toggleEquipSlot(slotNum) {
+        const item = inventory[slotNum];
+        if (!item || !item.collected) return;
+
+        for (let key in inventory) {
+            inventory[key].equipped = (key == slotNum) ? !inventory[key].equipped : false;
+        }
+
+        document.querySelectorAll('.slot').forEach(btn => btn.classList.remove('active'));
+        if (inventory[slotNum].equipped) {
+            document.getElementById(`slot-${item.name.replace('item_', '')}`).classList.add('active');
+        }
+    }
+
+    // --- 7. RAYCASTING ---
+    const raycaster = new THREE.Raycaster();
+    const centerVector = new THREE.Vector2(0, 0);
+    let hoveredMesh = null;
+
+    function checkRaycast() {
+        raycaster.setFromCamera(centerVector, camera);
+        const intersects = raycaster.intersectObjects(interactables, true);
+
+        const prompt = document.getElementById('interaction-prompt');
+        const promptText = document.getElementById('prompt-text');
+
+        if (intersects.length > 0 && intersects[0].distance < 3.5) {
+            hoveredMesh = intersects[0].object;
+            prompt.style.display = 'block';
+
+            let rootName = hoveredMesh.name || (hoveredMesh.parent ? hoveredMesh.parent.name : "");
+
+            if (rootName === "police_npc") promptText.textContent = "Talk to Police Officer";
+            else if (rootName === "exit_door") promptText.textContent = "Enter House";
+            else if (rootName.startsWith("item_")) promptText.textContent = "Pick Up Object";
+        } else {
+            hoveredMesh = null;
+            prompt.style.display = 'none';
+        }
+    }
+
+    function interact() {
+        if (!hoveredMesh) return;
+
+        let root = hoveredMesh;
+        while (root.parent && root.parent !== scene) root = root.parent;
+        let targetName = root.name;
+
+        if (targetName === "police_npc") {
+            lineIdx = (lineIdx + 1) % policeLines.length;
+            document.getElementById('dialogue-text').textContent = policeLines[lineIdx];
+        } else if (targetName === "exit_door") {
+            camera.position.set(0, 1.6, 8);
+            cameraRotation.yaw = Math.PI;
+            document.getElementById('dialogue-box').style.display = 'none';
+        } else if (targetName.startsWith("item_")) {
+            scene.remove(root);
+
+            if (targetName === "item_sword") {
+                inventory[1].collected = true;
+                document.getElementById('slot-sword').classList.add('collected');
+            } else if (targetName === "item_crate") {
+                inventory[2].collected = true;
+                document.getElementById('slot-crate').classList.add('collected');
+            } else if (targetName === "item_phone") {
+                inventory[3].collected = true;
+                document.getElementById('slot-phone').classList.add('collected');
+            }
+
+            document.getElementById('interaction-prompt').style.display = 'none';
+        }
+    }
+
+    function checkCollisions(newPos) {
+        const playerBox = new THREE.Box3(
+            new THREE.Vector3(newPos.x - playerRadius, newPos.y - 1.5, newPos.z - playerRadius),
+            new THREE.Vector3(newPos.x + playerRadius, newPos.y + 0.3, newPos.z + playerRadius)
+        );
+
+        for (let collider of colliders) {
+            if (playerBox.intersectsBox(collider)) return true;
+        }
+        return false;
+    }
+
+    // --- 8. RENDER LOOP ---
+    const clock = new THREE.Clock();
+
+    function animate() {
+        requestAnimationFrame(animate);
+
+        const delta = clock.getDelta();
+
+        if (isLocked) {
+            const staminaBar = document.getElementById('stamina-bar');
+
+            if (isSprinting && (moveForward || moveBackward || moveLeft || moveRight) && stamina > 0) {
+                stamina -= 35 * delta;
+            } else if (stamina < 100 && !isSprinting) {
+                stamina += 22 * delta;
+            }
+            staminaBar.style.width = `${Math.max(0, Math.min(100, stamina))}%`;
+
+            let speed = (isSprinting && stamina > 0) ? 8.0 : 4.0;
+
+            const moveDir = new THREE.Vector3();
+            if (moveForward) moveDir.z -= 1;
+            if (moveBackward) moveDir.z += 1;
+            if (moveLeft) moveDir.x -= 1;
+            if (moveRight) moveDir.x += 1;
+
+            moveDir.normalize();
+            moveDir.applyQuaternion(camera.quaternion);
+            moveDir.y = 0;
+
+            const targetPosX = camera.position.clone().addScaledVector(new THREE.Vector3(moveDir.x, 0, 0), speed * delta);
+            if (!checkCollisions(targetPosX)) camera.position.x = targetPosX.x;
+
+            const targetPosZ = camera.position.clone().addScaledVector(new THREE.Vector3(0, 0, moveDir.z), speed * delta);
+            if (!checkCollisions(targetPosZ)) camera.position.z = targetPosZ.z;
+
+            checkRaycast();
+        }
+
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+});
