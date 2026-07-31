@@ -1,349 +1,237 @@
-window.addEventListener('load', () => {
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+}
 
-    // --- 1. THREE.JS SCENE SETUP ---
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x050508);
-    scene.fog = new THREE.FogExp2(0x050508, 0.04);
+body, html {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: #000;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
 
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.getElementById('game-container').appendChild(renderer.domElement);
+#game-container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+}
 
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-    scene.add(ambientLight);
+/* Crosshair Reticle */
+#crosshair {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 8px;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 2px solid rgba(0, 0, 0, 0.5);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 10;
+}
 
-    const flashlight = new THREE.SpotLight(0xffffff, 2.5, 22, Math.PI / 4, 0.5);
-    camera.add(flashlight);
-    flashlight.position.set(0, 0, 1);
-    flashlight.target = camera;
-    scene.add(camera);
+/* Smooth Fade Overlay */
+#fade-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 1s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 30;
+}
 
-    const colliders = [];
-    const interactables = [];
+#fade-overlay.active {
+    opacity: 1;
+}
 
-    function buildBox(x, y, z, w, h, d, color, hasCollision = true) {
-        const geo = new THREE.BoxGeometry(w, h, d);
-        const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.8 });
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set(x, y, z);
-        scene.add(mesh);
+/* Key Display Styling */
+.key {
+    background: #2196f3;
+    color: #fff;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-weight: bold;
+    font-size: 13px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+}
 
-        if (hasCollision) {
-            const box = new THREE.Box3().setFromObject(mesh);
-            colliders.push(box);
-        }
-        return mesh;
-    }
+/* Interaction Prompt */
+#interaction-prompt {
+    position: absolute;
+    top: 58%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(12, 16, 26, 0.9);
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 15px;
+    display: none;
+    border: 1px solid #2196f3;
+    box-shadow: 0 0 15px rgba(33, 150, 243, 0.4);
+    z-index: 10;
+}
 
-    // --- 2. DUNGEON TUTORIAL ROOM (Spawn at Z = 50) ---
-    buildBox(0, -0.1, 50, 12, 0.2, 12, 0x1f1f28, false); // Floor
-    buildBox(0, 4.1, 50, 12, 0.2, 12, 0x15151e, false);  // Ceiling
+/* Stamina HUD */
+#stamina-container {
+    position: absolute;
+    bottom: 110px;
+    left: 30px;
+    width: 200px;
+    z-index: 10;
+}
 
-    buildBox(0, 2, 56, 12, 4, 0.5, 0x2d2d3a);   // Back Wall
-    buildBox(-6, 2, 50, 0.5, 4, 12, 0x2d2d3a);  // Left Wall
-    buildBox(6, 2, 50, 0.5, 4, 12, 0x2d2d3a);   // Right Wall
-    buildBox(-3.5, 2, 44, 5, 4, 0.5, 0x2d2d3a); // Front Wall Left
-    buildBox(3.5, 2, 44, 5, 4, 0.5, 0x2d2d3a);  // Front Wall Right
+#stamina-label {
+    color: #64b5f6;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
 
-    // Exit Door
-    const transitionDoor = new THREE.Mesh(
-        new THREE.BoxGeometry(2, 3.5, 0.2),
-        new THREE.MeshStandardMaterial({ color: 0x8b5a2b, emissive: 0x221100 })
-    );
-    transitionDoor.position.set(0, 1.75, 44);
-    transitionDoor.name = "exit_door";
-    scene.add(transitionDoor);
-    interactables.push(transitionDoor);
+#stamina-bar-bg {
+    width: 100%;
+    height: 10px;
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    overflow: hidden;
+}
 
-    // Police Officer NPC
-    const policeMesh = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 1.2, 16), new THREE.MeshStandardMaterial({ color: 0x0d47a1 }));
-    body.position.y = 0.6;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), new THREE.MeshStandardMaterial({ color: 0xffcc99 }));
-    head.position.y = 1.4;
-    const hat = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.28, 0.15, 16), new THREE.MeshStandardMaterial({ color: 0x000055 }));
-    hat.position.y = 1.65;
-    policeMesh.add(body, head, hat);
-    policeMesh.position.set(0, 0, 52);
-    policeMesh.name = "police_npc";
-    scene.add(policeMesh);
-    interactables.push(body, head, hat);
+#stamina-bar {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, #1e88e5, #00e676);
+    transition: width 0.1s linear;
+}
 
-    // --- 3. MAIN TWO-STORY HOUSE (Z = -10 to 10) ---
-    buildBox(0, -0.1, 0, 24, 0.2, 20, 0x222222, false); // Ground Floor
-    buildBox(0, 4, 0, 24, 0.2, 20, 0x3e2723, false);  // 2nd Floor
+/* Dialogue Box UI */
+#dialogue-box {
+    position: absolute;
+    top: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(10, 14, 23, 0.95);
+    border: 2px solid #2196f3;
+    color: white;
+    padding: 20px 28px;
+    border-radius: 12px;
+    text-align: center;
+    width: 90%;
+    max-width: 540px;
+    z-index: 10;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), 0 0 20px rgba(33, 150, 243, 0.3);
+}
 
-    // House Walls
-    buildBox(-12, 4, 0, 0.5, 8, 20, 0x37474f); 
-    buildBox(12, 4, 0, 0.5, 8, 20, 0x37474f);  
-    buildBox(0, 4, -10, 24, 8, 0.5, 0x37474f); 
-    buildBox(0, 4, 10, 24, 8, 0.5, 0x37474f);  
+#npc-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
 
-    // Stairs
-    for (let i = 0; i < 10; i++) {
-        buildBox(9, i * 0.4, 8 - (i * 0.8), 3, 0.4, 0.8, 0x4e342e);
-    }
+#npc-badge {
+    font-size: 20px;
+}
 
-    // Dividers & Furniture
-    buildBox(-2, 2, 0, 0.5, 4, 20, 0x263238); // Downstairs split
-    buildBox(0, 6, 0, 0.5, 4, 20, 0x263238);  // Upstairs split
-    buildBox(-6, 6, 0, 12, 4, 0.5, 0x263238);
+#npc-name {
+    color: #64b5f6;
+    font-size: 16px;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
 
-    const couch = buildBox(-7, 0.5, -4, 4, 1, 2, 0x7b1fa2); // Couch
-    const table = buildBox(-7, 0.4, -1, 2.5, 0.6, 1.5, 0x4e342e); // Table
+#dialogue-text {
+    font-size: 15px;
+    line-height: 1.5;
+    color: #e0e6ed;
+    min-height: 45px;
+}
 
-    // --- 4. 3D ITEMS ON THE GROUND ---
+#dialogue-hint {
+    margin-top: 12px;
+    font-size: 12px;
+    color: #90a4ae;
+}
 
-    // 1. SWORD (On Floor in Dungeon)
-    const swordGroup = new THREE.Group();
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.9, 0.02), new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.9, roughness: 0.2 }));
-    const hilt = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.04, 0.06), new THREE.MeshStandardMaterial({ color: 0xb8860b }));
-    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.25), new THREE.MeshStandardMaterial({ color: 0x4a2e1b }));
-    blade.position.y = 0.45;
-    handle.position.y = -0.12;
-    swordGroup.add(blade, hilt, handle);
-    swordGroup.rotation.z = Math.PI / 2; // Lie flat on floor
-    swordGroup.position.set(-3.5, 0.1, 50);
-    swordGroup.name = "item_sword";
-    scene.add(swordGroup);
-    interactables.push(blade, hilt, handle);
+/* Interactive Bottom Hotbar */
+#hotbar {
+    position: absolute;
+    bottom: 25px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 12px;
+    z-index: 20;
+}
 
-    // 2. CRATE (On Floor in Dungeon)
-    const crateMesh = new THREE.Mesh(
-        new THREE.BoxGeometry(0.8, 0.8, 0.8),
-        new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.9 })
-    );
-    crateMesh.position.set(3.5, 0.4, 50);
-    crateMesh.name = "item_crate";
-    scene.add(crateMesh);
-    interactables.push(crateMesh);
+.slot {
+    position: relative;
+    width: 70px;
+    height: 70px;
+    background: rgba(15, 20, 30, 0.85);
+    border: 2px solid #37474f;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
 
-    // 3. PHONE (On Table in House Living Room)
-    const phoneMesh = new THREE.Mesh(
-        new THREE.BoxGeometry(0.25, 0.02, 0.45),
-        new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.1 })
-    );
-    phoneMesh.position.set(-7, 0.72, -1);
-    phoneMesh.name = "item_phone";
-    scene.add(phoneMesh);
-    interactables.push(phoneMesh);
+.slot:hover {
+    border-color: #64b5f6;
+    transform: translateY(-2px);
+}
 
-    // --- 5. DIALOGUE SYSTEM ---
-    const policeLines = [
-        "Officer: Welcome to training! Move around with WASD and turn with your mouse.",
-        "Officer: Hold SHIFT to sprint. Look at objects on the ground and press E to grab them.",
-        "Officer: Pick up the Sword and Crate off the dungeon floor right now!",
-        "Officer: Once you have them, walk through the door behind me to enter the house!"
-    ];
-    let lineIdx = 0;
+.slot.collected {
+    border-color: #00e676;
+    background: rgba(0, 230, 118, 0.12);
+}
 
-    // --- 6. CONTROLS & MOVEMENT ---
-    let isLocked = false;
-    let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
-    let isSprinting = false;
+.slot.active {
+    border-color: #ffeb3b !important;
+    box-shadow: 0 0 15px rgba(255, 235, 59, 0.5);
+    transform: translateY(-4px);
+}
 
-    let stamina = 100;
-    const maxStamina = 100;
-    const cameraRotation = { yaw: 0, pitch: 0 };
-    const playerRadius = 0.4;
+.slot-number {
+    position: absolute;
+    top: 4px;
+    left: 6px;
+    font-size: 11px;
+    color: #90a4ae;
+    font-weight: bold;
+}
 
-    camera.position.set(0, 1.6, 48);
+.slot-label {
+    position: absolute;
+    bottom: 4px;
+    font-size: 10px;
+    color: #b0bec5;
+    font-weight: 500;
+}
 
-    document.body.addEventListener('click', () => {
-        document.body.requestPointerLock();
-    });
+.item-icon {
+    font-size: 26px;
+    opacity: 0.25;
+    filter: grayscale(100%);
+    transition: all 0.3s ease;
+}
 
-    document.addEventListener('pointerlockchange', () => {
-        isLocked = document.pointerLockElement === document.body;
-    });
-
-    document.addEventListener('mousemove', (e) => {
-        if (!isLocked) return;
-
-        cameraRotation.yaw -= e.movementX * 0.002;
-        cameraRotation.pitch -= e.movementY * 0.002;
-        cameraRotation.pitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, cameraRotation.pitch));
-
-        const euler = new THREE.Euler(0, 0, 0, 'YXZ');
-        euler.x = cameraRotation.pitch;
-        euler.y = cameraRotation.yaw;
-        camera.quaternion.setFromEuler(euler);
-    });
-
-    window.addEventListener('keydown', (e) => {
-        switch (e.code) {
-            case 'KeyW': moveForward = true; break;
-            case 'KeyS': moveBackward = true; break;
-            case 'KeyA': moveLeft = true; break;
-            case 'KeyD': moveRight = true; break;
-            case 'ShiftLeft':
-            case 'ShiftRight': isSprinting = true; break;
-            case 'KeyE': interact(); break;
-        }
-    });
-
-    window.addEventListener('keyup', (e) => {
-        switch (e.code) {
-            case 'KeyW': moveForward = false; break;
-            case 'KeyS': moveBackward = false; break;
-            case 'KeyA': moveLeft = false; break;
-            case 'KeyD': moveRight = false; break;
-            case 'ShiftLeft':
-            case 'ShiftRight': isSprinting = false; break;
-        }
-    });
-
-    // --- 7. INTERACTION & INVENTORY SLOT FILLING ---
-    const raycaster = new THREE.Raycaster();
-    const centerVector = new THREE.Vector2(0, 0);
-    let hoveredMesh = null;
-
-    function checkRaycast() {
-        raycaster.setFromCamera(centerVector, camera);
-        const intersects = raycaster.intersectObjects(interactables, true);
-
-        const prompt = document.getElementById('interaction-prompt');
-
-        if (intersects.length > 0 && intersects[0].distance < 3.5) {
-            hoveredMesh = intersects[0].object;
-            prompt.style.display = 'block';
-
-            let rootName = hoveredMesh.name || (hoveredMesh.parent ? hoveredMesh.parent.name : "");
-
-            if (rootName === "police_npc") {
-                prompt.innerHTML = "Press <span class='key'>E</span> to Talk to Officer";
-            } else if (rootName === "exit_door") {
-                prompt.innerHTML = "Press <span class='key'>E</span> to Enter House";
-            } else if (rootName === "item_sword") {
-                prompt.innerHTML = "Press <span class='key'>E</span> to Pick Up Sword";
-            } else if (rootName === "item_crate") {
-                prompt.innerHTML = "Press <span class='key'>E</span> to Pick Up Crate";
-            } else if (rootName === "item_phone") {
-                prompt.innerHTML = "Press <span class='key'>E</span> to Pick Up Phone";
-            }
-        } else {
-            hoveredMesh = null;
-            prompt.style.display = 'none';
-        }
-    }
-
-    function interact() {
-        if (!hoveredMesh) return;
-
-        let root = hoveredMesh;
-        while (root.parent && root.parent !== scene) {
-            root = root.parent;
-        }
-        let targetName = root.name;
-
-        if (targetName === "police_npc") {
-            lineIdx = (lineIdx + 1) % policeLines.length;
-            document.getElementById('dialogue-text').textContent = policeLines[lineIdx];
-        } 
-        else if (targetName === "exit_door") {
-            triggerHouseTransition();
-        } 
-        else if (targetName.startsWith("item_")) {
-            // Remove 3D Object from World Ground
-            scene.remove(root);
-
-            // Activate and Fill Empty Slot in Inventory HUD
-            if (targetName === "item_sword") {
-                document.getElementById('slot-sword').classList.add('collected');
-            } else if (targetName === "item_crate") {
-                document.getElementById('slot-crate').classList.add('collected');
-            } else if (targetName === "item_phone") {
-                document.getElementById('slot-phone').classList.add('collected');
-            }
-
-            document.getElementById('interaction-prompt').style.display = 'none';
-        }
-    }
-
-    function triggerHouseTransition() {
-        const overlay = document.getElementById('fade-overlay');
-        overlay.classList.add('active');
-
-        setTimeout(() => {
-            camera.position.set(0, 1.6, 8);
-            cameraRotation.yaw = Math.PI;
-            document.getElementById('dialogue-box').style.display = 'none';
-
-            setTimeout(() => {
-                overlay.classList.remove('active');
-            }, 500);
-        }, 1000);
-    }
-
-    function checkCollisions(newPos) {
-        const playerBox = new THREE.Box3(
-            new THREE.Vector3(newPos.x - playerRadius, newPos.y - 1.5, newPos.z - playerRadius),
-            new THREE.Vector3(newPos.x + playerRadius, newPos.y + 0.3, newPos.z + playerRadius)
-        );
-
-        for (let collider of colliders) {
-            if (playerBox.intersectsBox(collider)) return true;
-        }
-        return false;
-    }
-
-    // --- 8. GAME LOOP ---
-    const clock = new THREE.Clock();
-
-    function animate() {
-        requestAnimationFrame(animate);
-
-        const delta = clock.getDelta();
-
-        if (isLocked) {
-            const staminaBar = document.getElementById('stamina-bar');
-
-            if (isSprinting && (moveForward || moveBackward || moveLeft || moveRight) && stamina > 0) {
-                stamina -= 35 * delta;
-                if (stamina < 0) stamina = 0;
-            } else if (stamina < maxStamina && !isSprinting) {
-                stamina += 22 * delta;
-                if (stamina > maxStamina) stamina = maxStamina;
-            }
-
-            staminaBar.style.width = `${stamina}%`;
-
-            let speed = (isSprinting && stamina > 0) ? 8.0 : 4.0;
-
-            const moveDir = new THREE.Vector3();
-            if (moveForward) moveDir.z -= 1;
-            if (moveBackward) moveDir.z += 1;
-            if (moveLeft) moveDir.x -= 1;
-            if (moveRight) moveDir.x += 1;
-
-            moveDir.normalize();
-            moveDir.applyQuaternion(camera.quaternion);
-            moveDir.y = 0;
-
-            const targetPosX = camera.position.clone().addScaledVector(new THREE.Vector3(moveDir.x, 0, 0), speed * delta);
-            if (!checkCollisions(targetPosX)) camera.position.x = targetPosX.x;
-
-            const targetPosZ = camera.position.clone().addScaledVector(new THREE.Vector3(0, 0, moveDir.z), speed * delta);
-            if (!checkCollisions(targetPosZ)) camera.position.z = targetPosZ.z;
-
-            if (camera.position.x > 7 && camera.position.x < 11 && camera.position.z > -1 && camera.position.z < 9) {
-                const stairHeight = (8 - camera.position.z) * 0.5;
-                camera.position.y = Math.max(1.6, 1.6 + stairHeight);
-            }
-
-            checkRaycast();
-        }
-
-        renderer.render(scene, camera);
-    }
-
-    window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-
-    animate();
-});
+.slot.collected .item-icon {
+    opacity: 1;
+    filter: grayscale(0%);
+}
